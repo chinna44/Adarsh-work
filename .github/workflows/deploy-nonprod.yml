@@ -1,0 +1,129 @@
+name: Deploy Storage Mover - Test (non-prod)
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        type: choice
+        description: "Select the environment (test, dev, pre)"
+        required: true
+        options:
+          - test
+          - dev
+          - pre
+      action:
+        type: choice
+        description: "Action to perform"
+        required: true
+        options:
+          - provision-infra
+          - run-migration
+          - check-status
+          - teardown
+
+env:
+  TF_VERSION: '1.5.7'
+
+jobs:
+  storage-migration:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 'Write terraform.tfvars from secret (optional)'
+        if: ${{ secrets.TEST_TFVARS != '' }}
+        run: |
+          echo "Writing Test/terraform.tfvars from TEST_TFVARS secret"
+          echo "${{ secrets.TEST_TFVARS }}" > Test/terraform.tfvars
+
+      - name: Azure CLI Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID_DEST }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+
+      - name: Setup Terraform
+        if: inputs.action == 'provision-infra' || inputs.action == 'teardown'
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        if: inputs.action == 'provision-infra' || inputs.action == 'teardown'
+        working-directory: ./Test
+        run: |
+          terraform init -upgrade
+
+      - name: Terraform Validate
+        if: inputs.action == 'provision-infra'
+        working-directory: ./Test
+        run: terraform validate
+
+      - name: Terraform Plan
+        if: inputs.action == 'provision-infra'
+        working-directory: ./Test
+        run: terraform plan -var-file="./terraform.tfvars" -input=false
+
+      - name: Terraform Apply
+        if: inputs.action == 'provision-infra'
+        working-directory: ./Test
+        run: terraform apply --auto-approve -var-file="./terraform.tfvars" -input=false
+
+      - name: Start Storage Mover Job
+        if: inputs.action == 'run-migration'
+        run: |
+          az storage-mover job-definition start-job \
+            --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID_DEST }} \
+            --resource-group ${{ secrets.MOVER_RG }} \
+            --storage-mover-name ${{ secrets.MOVER_NAME }} \
+            --project-name ${{ secrets.PROJECT_NAME }} \
+            --job-definition-name ${{ secrets.JOB_NAME }}
+
+      - name: Poll Migration Until Complete
+        if: inputs.action == 'run-migration'
+        run: |
+          echo "Polling job status every 60s (max 3 hours)..."
+          for i in $(seq 1 180); do
+            STATUS=$(az storage-mover job-run list \
+              --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID_DEST }} \
+              --resource-group ${{ secrets.MOVER_RG }} \
+              --storage-mover-name ${{ secrets.MOVER_NAME }} \
+              --project-name ${{ secrets.PROJECT_NAME }} \
+              --job-definition-name ${{ secrets.JOB_NAME }} \
+              --query "[-1].status" -o tsv)
+
+            echo "[$i/180] Status: $STATUS"
+
+            if [[ "$STATUS" == "Succeeded" ]]; then
+              echo "Migration completed successfully"
+              exit 0
+            fi
+            if [[ "$STATUS" == "Failed" || "$STATUS" == "Canceled" || "$STATUS" == "CancelRequested" ]]; then
+              echo "Migration ended with status: $STATUS"
+              exit 1
+            fi
+            sleep 60
+          done
+          echo "Timed out after 3 hours — check Azure portal for job status"
+          exit 1
+
+      - name: Check Migration Status
+        if: inputs.action == 'check-status'
+        run: |
+          az storage-mover job-run list \
+            --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID_DEST }} \
+            --resource-group ${{ secrets.MOVER_RG }} \
+            --storage-mover-name ${{ secrets.MOVER_NAME }} \
+            --project-name ${{ secrets.PROJECT_NAME }} \
+            --job-definition-name ${{ secrets.JOB_NAME }} \
+            --query "[-1].{Status:status, Started:startTime, Ended:endTime, Files:statistics.filesTransferred, Bytes:statistics.bytesTransferred, Errors:statistics.filesErrored}" -o table
+
+      - name: Terraform Destroy
+        if: inputs.action == 'teardown'
+        working-directory: ./Test
+        run: terraform destroy --auto-approve -var-file="./terraform.tfvars" -input=false

@@ -1,0 +1,14 @@
+source_subscription_id = "<source-subscription-id>"
+dest_subscription_id   = "<destination-subscription-id>"
+source_storage_account_name = "<source-storage-account-name>"
+source_storage_account_resource_group = "<source-storage-account-resource-group>"
+dest_storage_account_name = "<destination-storage-account-name>"
+dest_storage_account_resource_group = "<destination-storage-account-resource-group>"
+destination_container_name = "<destination-container-name>"
+source_container_path = "/<source-container-path>"
+arc_vm_resource_id = "<your-arc-vm-resource-id>"
+arc_vm_uuid = "<your-arc-vm-uuid>"
+common_tags = {
+  Environment = "nonprod"
+  Project     = "pmaguard"
+}
