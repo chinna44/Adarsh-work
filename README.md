@@ -27,6 +27,7 @@ This folder contains a non-prod copy of the Storage Mover Terraform deployment.
 
 - A workflow has been added at `.github/workflows/deploy-nonprod.yml` to run Terraform from the `Test` folder using GitHub-hosted runners (`ubuntu-latest`).
 - This workflow uses the same style as the reference code: it reads values into `env.ARM_CLIENT_ID`, `env.ARM_TENANT_ID`, and `env.ARM_SUBSCRIPTION_ID` so your GitHub workflow behaves like the real pipeline.
+- The workflow now uses only the GitHub Variables you already created. No fallback values are required.
 
 ### What to create in GitHub
 
@@ -48,16 +49,6 @@ Create these as repository variables or environment variables for each environme
 - `JOB_NAME`
 - `TEST_TFVARS` (optional, only if you want the workflow to write `Test/terraform.tfvars` automatically)
 
-If you prefer to keep the old secret naming, the workflow also supports:
-- `AZURE_CLIENT_ID`
-- `AZURE_TENANT_ID`
-- `AZURE_SUBSCRIPTION_ID_DEST`
-- `MOVER_RG`
-- `MOVER_NAME`
-- `PROJECT_NAME`
-- `JOB_NAME`
-- `TEST_TFVARS`
-
 ### How to trigger
 
 - From Actions → select `Deploy Storage Mover - Test (non-prod)` → `Run workflow`.
@@ -69,3 +60,13 @@ If you prefer to keep the old secret naming, the workflow also supports:
 - Keep secrets only for sensitive values; keep the Azure IDs and names in Variables whenever possible.
 - The workflow assumes a `Test/terraform.tfvars` file exists or that you provide `TEST_TFVARS`.
 - Do not commit real credentials to the repository.
+
+### Arc VM values
+
+The Terraform variables `arc_vm_resource_id` and `arc_vm_uuid` must be populated in your `terraform.tfvars` file.
+
+You can get them from Azure Arc:
+1. Go to Azure Arc → Machines.
+2. Open your Arc-enabled server.
+3. Copy the Resource ID for `arc_vm_resource_id`.
+4. Copy the VM ID or Machine UUID value for `arc_vm_uuid`.
