@@ -48,6 +48,7 @@ Create these as repository variables or environment variables for each environme
 - `PROJECT_NAME`
 - `JOB_NAME`
 - `TEST_TFVARS` (optional, only if you want the workflow to write `Test/terraform.tfvars` automatically)
+- `AZURE_CLIENT_SECRET` (required if you are using service principal secret login)
 
 ### How to trigger
 

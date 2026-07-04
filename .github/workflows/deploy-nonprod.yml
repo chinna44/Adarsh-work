@@ -30,6 +30,7 @@ env:
   ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
   ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
   ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
+  AZURE_CLIENT_SECRET: ${{ vars.AZURE_CLIENT_SECRET || secrets.AZURE_CLIENT_SECRET }}
   MOVER_RG: ${{ vars.MOVER_RG }}
   MOVER_NAME: ${{ vars.MOVER_NAME }}
   PROJECT_NAME: ${{ vars.PROJECT_NAME }}
@@ -58,9 +59,11 @@ jobs:
       - name: Azure CLI Login
         uses: azure/login@v1
         with:
+          auth-type: service-principal
           client-id: ${{ env.ARM_CLIENT_ID }}
           tenant-id: ${{ env.ARM_TENANT_ID }}
           subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          client-secret: ${{ env.AZURE_CLIENT_SECRET }}
 
       - name: Setup Terraform
         if: inputs.action == 'provision-infra' || inputs.action == 'teardown'
