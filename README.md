@@ -26,21 +26,46 @@ This folder contains a non-prod copy of the Storage Mover Terraform deployment.
 ## GitHub Actions (GitHub-hosted runners)
 
 - A workflow has been added at `.github/workflows/deploy-nonprod.yml` to run Terraform from the `Test` folder using GitHub-hosted runners (`ubuntu-latest`).
-- Required repository secrets:
-   - `AZURE_CLIENT_ID` — service principal client id
-   - `AZURE_CLIENT_SECRET` — service principal secret
-   - `AZURE_TENANT_ID` — tenant id
-   - `AZURE_SUBSCRIPTION_ID_DEST` — destination subscription id (where Storage Mover will be deployed)
-   - `MOVER_RG`, `MOVER_NAME`, `PROJECT_NAME`, `JOB_NAME` — needed for run-migration/check-status steps
-   - (optional) `TEST_TFVARS` — entire `terraform.tfvars` content (workflow will write it to `Test/terraform.tfvars` if provided)
+- This workflow uses the same style as the reference code: it reads values into `env.ARM_CLIENT_ID`, `env.ARM_TENANT_ID`, and `env.ARM_SUBSCRIPTION_ID` so your GitHub workflow behaves like the real pipeline.
 
-- How to trigger:
-   - From Actions → select `Deploy Storage Mover - Test (non-prod)` → `Run workflow`.
-   - Choose `env` (test/dev/pre) and `action` (`provision-infra`, `run-migration`, `check-status`, `teardown`).
+### What to create in GitHub
 
-- Notes & precautions:
-   - The workflow assumes a `Test/terraform.tfvars` file exists (or you provide `TEST_TFVARS` secret).
-   - GitHub-hosted runners are ephemeral and provided by GitHub — no self-hosted runner is required.
-   - Do NOT commit secrets or real credentials to the repository. Use repository secrets.
+1. Open your repository on GitHub.
+2. Go to Settings → Secrets and variables → Actions.
+3. Choose the tab you want:
+   - Variables: for non-sensitive values such as subscription IDs, resource group names, and storage mover names.
+   - Secrets: for sensitive values such as a client secret if you decide to use secret-based login.
 
-If you want, I can also add a small helper action that decrypts an encrypted `terraform.tfvars.enc` artifact or generates `terraform.tfvars` from repository secrets.
+### Recommended values
+
+Create these as repository variables or environment variables for each environment (`test`, `dev`, `pre`):
+- `ARM_CLIENT_ID`
+- `ARM_TENANT_ID`
+- `ARM_SUBSCRIPTION_ID`
+- `MOVER_RG`
+- `MOVER_NAME`
+- `PROJECT_NAME`
+- `JOB_NAME`
+- `TEST_TFVARS` (optional, only if you want the workflow to write `Test/terraform.tfvars` automatically)
+
+If you prefer to keep the old secret naming, the workflow also supports:
+- `AZURE_CLIENT_ID`
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID_DEST`
+- `MOVER_RG`
+- `MOVER_NAME`
+- `PROJECT_NAME`
+- `JOB_NAME`
+- `TEST_TFVARS`
+
+### How to trigger
+
+- From Actions → select `Deploy Storage Mover - Test (non-prod)` → `Run workflow`.
+- Choose `env` (`test`, `dev`, or `pre`) and `action` (`provision-infra`, `run-migration`, `check-status`, or `teardown`).
+
+### Notes & precautions
+
+- GitHub-hosted runners are ephemeral and provided by GitHub, so no self-hosted runner is required.
+- Keep secrets only for sensitive values; keep the Azure IDs and names in Variables whenever possible.
+- The workflow assumes a `Test/terraform.tfvars` file exists or that you provide `TEST_TFVARS`.
+- Do not commit real credentials to the repository.

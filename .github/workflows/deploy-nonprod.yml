@@ -21,8 +21,19 @@ on:
           - check-status
           - teardown
 
+permissions:
+  id-token: write
+  contents: read
+
 env:
   TF_VERSION: '1.5.7'
+  ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID || secrets.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID || secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID || vars.ARM_SUBSCRIPTION_ID_DEST || secrets.AZURE_SUBSCRIPTION_ID_DEST }}
+  MOVER_RG: ${{ vars.MOVER_RG || secrets.MOVER_RG }}
+  MOVER_NAME: ${{ vars.MOVER_NAME || secrets.MOVER_NAME }}
+  PROJECT_NAME: ${{ vars.PROJECT_NAME || secrets.PROJECT_NAME }}
+  JOB_NAME: ${{ vars.JOB_NAME || secrets.JOB_NAME }}
 
 jobs:
   storage-migration:
@@ -33,19 +44,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 'Write terraform.tfvars from secret (optional)'
-        if: ${{ secrets.TEST_TFVARS != '' }}
+      - name: 'Write terraform.tfvars from variable or secret (optional)'
+        shell: bash
         run: |
-          echo "Writing Test/terraform.tfvars from TEST_TFVARS secret"
-          echo "${{ secrets.TEST_TFVARS }}" > Test/terraform.tfvars
+          if [ -n "${{ vars.TEST_TFVARS }}" ]; then
+            echo "Writing Test/terraform.tfvars from TEST_TFVARS repository/environment variable"
+            printf '%s\n' '${{ vars.TEST_TFVARS }}' > Test/terraform.tfvars
+          elif [ -n "${{ secrets.TEST_TFVARS }}" ]; then
+            echo "Writing Test/terraform.tfvars from TEST_TFVARS secret"
+            printf '%s\n' '${{ secrets.TEST_TFVARS }}' > Test/terraform.tfvars
+          fi
 
       - name: Azure CLI Login
         uses: azure/login@v1
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID_DEST }}
-          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
 
       - name: Setup Terraform
         if: inputs.action == 'provision-infra' || inputs.action == 'teardown'
@@ -78,11 +93,11 @@ jobs:
         if: inputs.action == 'run-migration'
         run: |
           az storage-mover job-definition start-job \
-            --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID_DEST }} \
-            --resource-group ${{ secrets.MOVER_RG }} \
-            --storage-mover-name ${{ secrets.MOVER_NAME }} \
-            --project-name ${{ secrets.PROJECT_NAME }} \
-            --job-definition-name ${{ secrets.JOB_NAME }}
+            --subscription ${{ env.ARM_SUBSCRIPTION_ID }} \
+            --resource-group ${{ env.MOVER_RG }} \
+            --storage-mover-name ${{ env.MOVER_NAME }} \
+            --project-name ${{ env.PROJECT_NAME }} \
+            --job-definition-name ${{ env.JOB_NAME }}
 
       - name: Poll Migration Until Complete
         if: inputs.action == 'run-migration'
@@ -90,11 +105,11 @@ jobs:
           echo "Polling job status every 60s (max 3 hours)..."
           for i in $(seq 1 180); do
             STATUS=$(az storage-mover job-run list \
-              --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID_DEST }} \
-              --resource-group ${{ secrets.MOVER_RG }} \
-              --storage-mover-name ${{ secrets.MOVER_NAME }} \
-              --project-name ${{ secrets.PROJECT_NAME }} \
-              --job-definition-name ${{ secrets.JOB_NAME }} \
+              --subscription ${{ env.ARM_SUBSCRIPTION_ID }} \
+              --resource-group ${{ env.MOVER_RG }} \
+              --storage-mover-name ${{ env.MOVER_NAME }} \
+              --project-name ${{ env.PROJECT_NAME }} \
+              --job-definition-name ${{ env.JOB_NAME }} \
               --query "[-1].status" -o tsv)
 
             echo "[$i/180] Status: $STATUS"
@@ -116,11 +131,11 @@ jobs:
         if: inputs.action == 'check-status'
         run: |
           az storage-mover job-run list \
-            --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID_DEST }} \
-            --resource-group ${{ secrets.MOVER_RG }} \
-            --storage-mover-name ${{ secrets.MOVER_NAME }} \
-            --project-name ${{ secrets.PROJECT_NAME }} \
-            --job-definition-name ${{ secrets.JOB_NAME }} \
+            --subscription ${{ env.ARM_SUBSCRIPTION_ID }} \
+            --resource-group ${{ env.MOVER_RG }} \
+            --storage-mover-name ${{ env.MOVER_NAME }} \
+            --project-name ${{ env.PROJECT_NAME }} \
+            --job-definition-name ${{ env.JOB_NAME }} \
             --query "[-1].{Status:status, Started:startTime, Ended:endTime, Files:statistics.filesTransferred, Bytes:statistics.bytesTransferred, Errors:statistics.filesErrored}" -o table
 
       - name: Terraform Destroy
