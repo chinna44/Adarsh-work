@@ -59,8 +59,8 @@ jobs:
       - name: Azure CLI Login
         uses: azure/login@v1
         with:
-          auth-type: SERVICE_PRINCIPAL
-          creds: ${{ toJson({ clientId: env.ARM_CLIENT_ID, tenantId: env.ARM_TENANT_ID, subscriptionId: env.ARM_SUBSCRIPTION_ID, clientSecret: env.AZURE_CLIENT_SECRET }) }}
+          auth-type: "SERVICE_PRINCIPAL"
+          creds: "${{ toJson({ clientId: env.ARM_CLIENT_ID, tenantId: env.ARM_TENANT_ID, subscriptionId: env.ARM_SUBSCRIPTION_ID, clientSecret: env.AZURE_CLIENT_SECRET }) }}"
 
       - name: Setup Terraform
         if: inputs.action == 'provision-infra' || inputs.action == 'teardown'
